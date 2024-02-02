@@ -326,7 +326,13 @@ with tab3:
         st.write("Incorrect Passcode, please try again.")
 
 with tab4:
-    st.write(df)
+    st.title("Match History")
+    df = pd.read_csv("CatanReport_Cleaned.csv")
+    df["Date"] = pd.to_datetime(df["Date"]).dt.date
+    df = df.sort_values(by="Date", ascending=False)
+    st.dataframe(df, height=1000)
+    
+    
 with tab5:
     unnecessary_columns = ['Date', 'Year', 'Quarter']
     df.drop(columns=unnecessary_columns, inplace=True, errors='ignore')
