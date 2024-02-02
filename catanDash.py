@@ -4,6 +4,7 @@ import numpy as np
 import base64
 import matplotlib.pyplot as plt
 import seaborn as sns
+from datetime import datetime
 
 def set_bg_image(image_file):
     """
@@ -26,13 +27,13 @@ def set_bg_image(image_file):
         unsafe_allow_html=True
     )
 
-tab1, tab2 = st.tabs(["Main", "2023 Award Recipients"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Main", "2023 Award Recipients", "Enter a Game", "Match History", "Head to Head"])
 
 # Set the background image
 set_bg_image('CatanDark.png')
 with tab1:
     # Load data
-    df = pd.read_csv('CatanReport_Modified.csv')
+    df = pd.read_csv('CatanReport_Cleaned.csv')
 
     df = df.dropna(subset=['Date'])
 
@@ -56,7 +57,7 @@ with tab1:
         df['Date'] = pd.to_datetime(df['Date'])
 
         # Identify the player columns
-        player_columns = df.columns.drop(['Date', 'Year', 'Quarter', 'Chelsea', 'Lydia','Eddie', 'Unnamed: 16', 'Daniel', 'Austin'])
+        player_columns = df.columns.drop(['Date', 'Year', 'Quarter', 'Chelsea', 'Lydia','Eddie', 'Daniel', 'Austin'])
 
         # Creating a temporary DataFrame for win calculations
         temp_df = df[player_columns].applymap(lambda x: 1 if x in [10,11] else 0)
@@ -257,6 +258,135 @@ with tab2:
         st.markdown(text_with_stroke2, unsafe_allow_html=True)
         st.subheader("Stale Fart Award")
         st.markdown(text_with_stroke3, unsafe_allow_html=True)
+with tab3:
+    pwd = st.text_input("Please enter data custodian passcode.", type="password")
+    if pwd == "5829":
+        # Function to determine the quarter from a given date
+        def get_quarter(date):
+            month = date.month
+            if month in [1, 2, 3]:
+                return f"{date.year}Q1"
+            elif month in [4, 5, 6]:
+                return f"{date.year}Q2"
+            elif month in [7, 8, 9]:
+                return f"{date.year}Q3"
+            else:
+                return f"{date.year}Q4"
 
+        # Streamlit page setup
+        st.title("Catan Game Score Entry")
+
+        # Load the CSV file
+        df = pd.read_csv('CatanReport_Cleaned.csv')  # Update with the correct path
+
+        # Create a form for data input
+        with st.form("score_form", clear_on_submit=True):
+            # Date picker
+            date = st.date_input("Date", datetime.now())
+
+            # Determine the number of columns based on the number of players
+            # Adjust the number inside range() to control how many input fields per row you'd like
+            columns = st.columns(4)  # For example, 4 columns for 4 input fields in a row
+
+            scores = {}
+            # Iterate over the player columns and create an input field in each column
+            for i, column in enumerate(df.columns):
+                if column not in ['Date', 'Year', 'Quarter', ]:  # Exclude non-player and metadata columns
+                    with columns[i % len(columns)]:  # Cycle through the columns
+                        # Use text_input with empty default for scores, allowing for non-entry
+                        score_input = st.text_input(f"Score for {column}:", '', placeholder="DNP")
+                        # Convert to int if not empty, else None
+                        scores[column] = int(score_input) if score_input else None
+
+            # Submit button
+            submitted = st.form_submit_button("Submit")
+
+            if submitted:
+                # Determine year and quarter from the date
+                year = date.year
+                quarter = get_quarter(date)
+
+                # Create a new row with the input data
+                new_data = {
+                    'Date': date.strftime('%Y-%m-%d'),
+                    'Year': year,
+                    'Quarter': f"{year}Q{quarter}"
+                }
+                new_data.update(scores)
+
+                # Append to DataFrame and save to CSV
+                new_df = df.append(new_data, ignore_index=True)
+                new_df.to_csv('CatanReport_Cleaned.csv', index=False)  # Update with the correct path
+
+                st.success("Data submitted successfully!")
+
+        # Optionally, display the DataFrame
+        st.write(df)
+    elif pwd and pwd != "5829":
+        st.write("Incorrect Passcode, please try again.")
+
+with tab4:
+    st.write(df)
+with tab5:
+    unnecessary_columns = ['Date', 'Year', 'Quarter']
+    df.drop(columns=unnecessary_columns, inplace=True, errors='ignore')
+
+    # Extract player names
+    player_names = df.columns.tolist()
+
+    # Streamlit app
+    # Assuming the initial setup is done and df is loaded correctly
+
+    # Streamlit app setup for the head-to-head statistics tab
+    st.title('Player Head-to-Head Win Statistics')
+
+    # Dropdown for selecting a player
+    selected_player = st.selectbox('Select a Player:', player_names)
+
+    # Button to calculate and display statistics
+    if st.button('Show Statistics'):
+        # Initialize dictionaries to hold statistics
+        win_counts = {player: 0 for player in player_names if player != selected_player}
+        total_games_with_each_player = {player: 0 for player in player_names if player != selected_player}
+        lobby_sizes = {player: [] for player in player_names if player != selected_player}  # To track lobby sizes
         
-   
+        # Iterate through each game
+        for _, row in df.iterrows():
+            # Count non-NA (non-empty) entries for players in the game, ensuring we count at least 4 players
+            players_in_game = max(4, row.notna().sum() - 3)  # Adjusted to ensure minimum lobby size of 4, -3 accounts for Date, Year, and Quarter columns
+
+            if pd.notna(row[selected_player]):  # If the selected player played in the game
+                max_score = row[player_names].max()  # Calculate max score among players only
+                if row[selected_player] == max_score:  # If the selected player won
+                    for player in win_counts.keys():
+                        if pd.notna(row[player]):  # If another player was also in the game
+                            win_counts[player] += 1
+                            total_games_with_each_player[player] += 1
+                            lobby_sizes[player].append(players_in_game)
+                else:  # If the selected player didn't win but played
+                    for player in total_games_with_each_player.keys():
+                        if pd.notna(row[player]):  # If another player was also in the game
+                            total_games_with_each_player[player] += 1
+                            lobby_sizes[player].append(players_in_game)
+        
+        # Prepare data for DataFrame
+        # Prepare data for DataFrame, keeping win percentages as numeric for sorting
+        stats_data = [{
+            'Player': player,
+            'Games Played Together': total_games_with_each_player[player],
+            'Wins': win_counts[player],
+            'Win Percentage': win_counts[player] / total_games_with_each_player[player] * 100 if total_games_with_each_player[player] > 0 else 0,
+            #'Average Lobby Size': sum(lobby_sizes[player]) / len(lobby_sizes[player]) if lobby_sizes[player] else 0
+        } for player in player_names if player != selected_player and total_games_with_each_player[player] > 0]
+
+        # Convert to DataFrame
+        stats_df = pd.DataFrame(stats_data)
+
+        # Sort the DataFrame by 'Win Percentage' in descending order
+        stats_df = stats_df.sort_values(by='Win Percentage', ascending=False)
+
+        # Convert 'Win Percentage' to string format with '%' for display after sorting
+        stats_df['Win Percentage'] = stats_df['Win Percentage'].apply(lambda x: f"{x:.2f}%")
+
+        # Display the sorted DataFrame
+        st.dataframe(stats_df)
