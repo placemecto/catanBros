@@ -315,8 +315,8 @@ with tab3:
                 new_data.update(scores)
 
                 # Append to DataFrame and save to CSV
-                new_df = df.append(new_data, ignore_index=True)
-                new_df.to_csv('CatanReport_Cleaned.csv', index=False)  # Update with the correct path
+                new_df = pd.concat([df, pd.DataFrame([new_data])], ignore_index=True)
+                new_df.to_csv('CatanReport_Cleaned.csv', index=False)
 
                 st.success("Data submitted successfully!")
 
@@ -326,13 +326,41 @@ with tab3:
         st.write("Incorrect Passcode, please try again.")
 
 with tab4:
-    st.title("Match History")
+    # Load and prepare your DataFrame
     df = pd.read_csv("CatanReport_Cleaned.csv")
-    df["Date"] = pd.to_datetime(df["Date"]).dt.date
     df = df.sort_values(by="Date", ascending=False)
-    st.dataframe(df, height=1000)
-    
-    
+    df["Date"] = pd.to_datetime(df["Date"]).dt.date
+
+    match_history = {}
+    player_names = [col for col in df.columns if col not in ['Date', 'Year', 'Quarter']]
+    for i, row in df.iterrows():
+        match_date = row['Date']
+        if match_date not in match_history:
+            match_history[match_date] = []
+
+        match_scores = {player: row[player] for player in player_names if row[player] >= 2}
+        
+        # Sort and store the scores for later iteration
+        sorted_match_scores = dict(sorted(match_scores.items(), key=lambda item: item[1]))
+        match_history[match_date].append(sorted_match_scores)
+
+    for date, matches in match_history.items():
+        st.write(f"Games played on {date}:")
+        
+        for match in matches:
+            player_scores = []
+            # Get the winner (the last one in sorted order) separately
+            winner = list(match.keys())[-1]
+            for player, score in match.items():
+                if player == winner:
+                    # Winner in bold and green
+                    player_scores.append(f"**<span style='color:green'>{player}: {score}</span>**")
+                else:
+                    # Others in regular style
+                    player_scores.append(f"{player}: {score}")
+            # Join the player scores into a single string and display
+            st.markdown(", ".join(player_scores), unsafe_allow_html=True)
+        st.write("")  # Line break for readability
 with tab5:
     unnecessary_columns = ['Date', 'Year', 'Quarter']
     df.drop(columns=unnecessary_columns, inplace=True, errors='ignore')
