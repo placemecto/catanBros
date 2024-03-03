@@ -320,8 +320,6 @@ with tab3:
 
                 st.success("Data submitted successfully!")
 
-        # Optionally, display the DataFrame
-        st.write(df)
     elif pwd and pwd != "5829":
         st.write("Incorrect Passcode, please try again.")
 
